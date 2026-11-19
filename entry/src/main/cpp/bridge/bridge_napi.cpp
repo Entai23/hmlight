@@ -44,6 +44,7 @@ extern "C" void LiDiagResetUdpRxBytes(void);
 #include <mutex>
 #include <string>
 #include <thread>
+#include <condition_variable>
 
 #define LI_VERSION_STRING "moonlight-common-c/" MC_COMMIT
 
@@ -52,7 +53,7 @@ namespace {
 // ---------------------------------------------------------------------------
 // NAPI helpers
 // ---------------------------------------------------------------------------
-napi_threadsafe_function g_tsfn = nullptr;
+std::atomic<napi_threadsafe_function> g_tsfn{nullptr};
 
 struct BridgeEvent {
     std::string type;
@@ -77,12 +78,20 @@ void CallJs(napi_env env, napi_value jsCb, void*, void* data) {
 
 void Emit(const std::string& type, const std::string& payload) {
     mdiag::EventJson("event", "\"type\":\"" + mdiag::JsonEscape(type) + "\",\"payload\":" + payload);
-    if (g_tsfn == nullptr) {
+    napi_threadsafe_function fn = g_tsfn.load(std::memory_order_acquire);
+    if (fn == nullptr) {
         return;
     }
     BridgeEvent* ev = new BridgeEvent{type, payload};
-    if (napi_call_threadsafe_function(g_tsfn, ev, napi_tsfn_nonblocking) != napi_ok) {
+    if (napi_call_threadsafe_function(fn, ev, napi_tsfn_nonblocking) != napi_ok) {
         delete ev;
+    }
+}
+
+static void ReleaseTsfn() {
+    napi_threadsafe_function old = g_tsfn.exchange(nullptr, std::memory_order_acq_rel);
+    if (old != nullptr) {
+        napi_release_threadsafe_function(old, napi_tsfn_release);
     }
 }
 
@@ -109,8 +118,9 @@ std::string GetString(napi_env env, napi_value value) {
     }
     size_t len = 0;
     napi_get_value_string_utf8(env, value, nullptr, 0, &len);
-    std::string out(len, '\0');
+    std::string out(len + 1, '\0');
     napi_get_value_string_utf8(env, value, &out[0], len + 1, &len);
+    out.resize(len);
     return out;
 }
 
@@ -160,6 +170,18 @@ int g_videoHeight = 0;
 int g_videoFps = 0;
 int g_decodeUnitErrors = 0;
 std::thread g_statsThread;
+std::mutex g_statsMutex;
+std::mutex g_statsThreadMutex;
+std::condition_variable g_statsCv;
+
+void StopStatsThread() {
+    std::lock_guard<std::mutex> lock(g_statsThreadMutex);
+    g_statsRunning.store(false);
+    g_statsCv.notify_all();
+    if (g_statsThread.joinable()) {
+        g_statsThread.join();
+    }
+}
 
 const char* VideoFormatName(int format) {
     switch (format) {
@@ -310,19 +332,28 @@ void BridgeClConnectionStarted(void) {
     mdiag::Log("conn", "connection started +%llums", static_cast<unsigned long long>(elapsed));
     Emit("connected", "{\"elapsedMs\":" + std::to_string(elapsed) + "}");
 
-    if (!g_statsRunning.exchange(true)) {
-        // A previous session's thread may still be joinable; assigning over it
-        // would call std::terminate(). Always detach before replacing.
-        if (g_statsThread.joinable()) {
-            g_statsThread.detach();
-        }
-        g_statsThread = std::thread([]() {
-            uint64_t lastFrames = 0;
+    {
+        std::lock_guard<std::mutex> lock(g_statsThreadMutex);
+        if (!g_statsRunning.exchange(true)) {
+            // Ensure any previous stats thread has fully exited before replacing it.
+            if (g_statsThread.joinable()) {
+                g_statsRunning.store(false);
+                g_statsCv.notify_all();
+                g_statsThread.join();
+                g_statsRunning.store(true);
+            }
+            g_statsThread = std::thread([]() {
+            uint64_t lastFrames = g_videoFrames.load();
             uint64_t lastUs = mdiag::NowUs();
-            while (g_statsRunning.load()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(2000));
-                if (!g_statsRunning.load()) {
-                    break;
+            while (true) {
+                {
+                    std::unique_lock<std::mutex> lock(g_statsMutex);
+                    g_statsCv.wait_for(lock, std::chrono::milliseconds(2000), []() {
+                        return !g_statsRunning.load();
+                    });
+                    if (!g_statsRunning.load()) {
+                        break;
+                    }
                 }
                 uint64_t now = mdiag::NowUs();
                 uint64_t frames = g_videoFrames.load();
@@ -346,17 +377,14 @@ void BridgeClConnectionStarted(void) {
                 mdiag::Log("stats", "%s", buf);
                 Emit("stats", buf);
             }
-        });
+            });
+        }
     }
 }
 
 void BridgeClConnectionTerminated(int errorCode) {
     g_connected.store(false);
-    g_statsRunning.store(false);
-    if (g_statsThread.joinable()) {
-        // Detach so the termination callback (core thread) is never blocked.
-        g_statsThread.detach();
-    }
+    StopStatsThread();
     mdiag::Log("conn", "connection terminated errorCode=%d", errorCode);
     Emit("terminated", "{\"errorCode\":" + std::to_string(errorCode) + "}");
 }
@@ -879,10 +907,7 @@ napi_value JsSetEventCallback(napi_env env, napi_callback_info info) {
     napi_value args[1] = {nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
 
-    if (g_tsfn != nullptr) {
-        napi_release_threadsafe_function(g_tsfn, napi_tsfn_release);
-        g_tsfn = nullptr;
-    }
+    ReleaseTsfn();
     if (argc < 1) {
         return MakeInt(env, 0);
     }
@@ -893,16 +918,17 @@ napi_value JsSetEventCallback(napi_env env, napi_callback_info info) {
     }
     napi_value name;
     napi_create_string_utf8(env, "moonbridgeEvents", NAPI_AUTO_LENGTH, &name);
-    napi_create_threadsafe_function(env, args[0], nullptr, name, 0, 1, nullptr, nullptr,
-                                    nullptr, CallJs, &g_tsfn);
+    napi_threadsafe_function fn = nullptr;
+    napi_status status = napi_create_threadsafe_function(env, args[0], nullptr, name, 0, 1,
+                                                          nullptr, nullptr, nullptr, CallJs, &fn);
+    if (status == napi_ok && fn != nullptr) {
+        g_tsfn.store(fn, std::memory_order_release);
+    }
     return MakeInt(env, 0);
 }
 
 napi_value JsClearEventCallback(napi_env env, napi_callback_info) {
-    if (g_tsfn != nullptr) {
-        napi_release_threadsafe_function(g_tsfn, napi_tsfn_release);
-        g_tsfn = nullptr;
-    }
+    ReleaseTsfn();
     return MakeInt(env, 0);
 }
 
@@ -1085,7 +1111,7 @@ struct VoidAsyncData {
 
 void StopExecute(napi_env, void* data) {
     mdiag::Log("conn", "stop requested (async)");
-    g_statsRunning.store(false);
+    StopStatsThread();
     std::lock_guard<std::mutex> lock(g_connMutex);
     // Interrupt first so LiStopConnection doesn't wait for network timeouts.
     LiInterruptConnection();
