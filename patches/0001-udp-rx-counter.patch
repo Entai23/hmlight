@@ -1,0 +1,32 @@
+diff --git a/src/PlatformSockets.c b/src/PlatformSockets.c
+index 25236a1..6ec3ebf 100644
+--- a/src/PlatformSockets.c
++++ b/src/PlatformSockets.c
+@@ -183,6 +183,16 @@ bool isSocketReadable(SOCKET s) {
+     return true;
+ }
+ 
++static unsigned long long g_udpRxBytes = 0;
++
++unsigned long long LiDiagGetUdpRxBytes(void) {
++    return __atomic_load_n(&g_udpRxBytes, __ATOMIC_RELAXED);
++}
++
++void LiDiagResetUdpRxBytes(void) {
++    __atomic_store_n(&g_udpRxBytes, 0, __ATOMIC_RELAXED);
++}
++
+ int recvUdpSocket(SOCKET s, char* buffer, int size, bool useSelect,
+                   struct sockaddr_storage* remoteAddr, SOCKADDR_LEN* addrLen) {
+     int err;
+@@ -233,6 +243,10 @@ int recvUdpSocket(SOCKET s, char* buffer, int size, bool useSelect,
+     } while (err < 0 && LastSocketError() == ECONNREFUSED);
+ #endif
+ 
++    if (err > 0) {
++        __atomic_add_fetch(&g_udpRxBytes, (unsigned long long)err, __ATOMIC_RELAXED);
++    }
++
+     return err;
+ }
+ 

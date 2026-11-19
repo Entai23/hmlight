@@ -1,0 +1,89 @@
+HMLight — 第三方组件与许可声明
+================================
+
+本项目（HMLight）是一个 HarmonyOS 上的游戏串流客户端，基于 Moonlight 项目的
+moonlight-common-c 修改而来，与 Moonlight 官方不存在隶属、赞助或背书关系。
+
+本项目整体以 GNU General Public License v3.0 发布，全文见仓库根目录 LICENSE。
+
+
+一、主要上游项目
+
+  名称    : Moonlight / moonlight-common-c
+  版本    : 94c65fd364d17b223f00a8763c9a5d94a66cb8dd
+  来源    : https://github.com/moonlight-stream/moonlight-common-c
+  许可证  : GNU General Public License v3.0
+  版权    : Moonlight Stream Project 及其贡献者
+  是否修改: 是（修改点见 README「修改说明」）
+  许可全文: entry/src/main/cpp/third_party/moonlight-common-c/LICENSE.txt
+
+
+二、第三方组件
+
+  1) ENet
+     版本    : 98dbb897ac4a7208038e0782cddedf89dcf0723a
+     来源    : https://github.com/cgutman/enet
+     许可证  : MIT
+     版权    : Copyright (c) 2002-2020 Lee Salzman
+     许可全文: entry/src/main/cpp/third_party/enet/LICENSE
+
+  2) Mbed TLS（含 mbedtls-framework 子模块）
+     版本    : 82e69999f91126589a28b70dd75b69fbcabe2711
+               framework: ced31491c5ec907a6be533512f19dc1779230ac1
+     来源    : https://github.com/Mbed-TLS/mbedtls
+               https://github.com/Mbed-TLS/mbedtls-framework
+     许可证  : Apache-2.0 或 GPL-2.0-or-later（双许可，使用者可任选其一）
+               本项目按 Apache-2.0 使用
+     版权    : Copyright The Mbed TLS Contributors
+     许可全文: entry/src/main/cpp/third_party/mbedtls/LICENSE
+
+  3) Opus
+     版本    : 31b4b36284394b66a4c9d7352991aa977dfc8bc1
+     来源    : https://github.com/xiph/opus
+     许可证  : BSD-3-Clause
+     版权    : Copyright 2001-2023 Xiph.Org, Skype Limited, Octasic,
+               Jean-Marc Valin, Timothy B. Terriberry, CSIRO,
+               Gregory Maxwell, Mark Borgerding, Erik de Castro Lopo,
+               Mozilla, Amazon
+     许可全文: entry/src/main/cpp/third_party/opus/COPYING
+
+  4) nanors
+     版本    : a9b1636f9c98dbfdd0daeaf6982ccd24d1c30f29
+     来源    : https://github.com/sleepybishop/nanors
+     许可证  : MIT
+     版权    : Copyright (c) 2021 Joseph Calderon
+     许可全文: entry/src/main/cpp/third_party/nanors/LICENSE
+
+
+三、许可证全文的位置
+
+上述组件的许可证全文均随源码一并分发，未做删改：
+
+  entry/src/main/cpp/third_party/enet/LICENSE
+  entry/src/main/cpp/third_party/mbedtls/LICENSE
+  entry/src/main/cpp/third_party/moonlight-common-c/LICENSE.txt
+  entry/src/main/cpp/third_party/nanors/LICENSE
+  entry/src/main/cpp/third_party/opus/COPYING
+  entry/src/main/cpp/third_party/opus/LICENSE_PLEASE_READ.txt
+  LICENSE                                  （本项目自身的 GPLv3 全文）
+
+各组件对应的准确 upstream commit 记录在：
+  entry/src/main/cpp/third_party/VERSIONS.md
+
+
+四、商标声明
+
+"Moonlight"、"NVIDIA"、"GameStream"、"Sunshine" 等名称与标识分别为其各自
+权利人的商标或注册商标。本项目在 README、NOTICE 与应用内「关于」页中提及这些
+名称，仅用于事实性说明代码来源与互操作性，不表示任何形式的关联、赞助或认可，
+也不将其作为本项目的产品名或图标。
+
+
+五、免责声明
+
+本软件按「现状」提供，不附带任何明示或默示的担保，包括但不限于对适销性、
+特定用途适用性和非侵权性的担保。在任何情况下，作者或版权持有人均不对因本软件
+或本软件的使用或其他交易行为而产生的任何索赔、损害或其他责任承担责任，无论是
+在合同诉讼、侵权行为还是其他方面。
+
+本工程不包含任何 NVIDIA 专有代码。串流服务端需由用户自行部署（如 Sunshine）。
