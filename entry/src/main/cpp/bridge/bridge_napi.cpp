@@ -1167,6 +1167,17 @@ napi_value JsGetStageName(napi_env env, napi_callback_info info) {
     return MakeString(env, name ? name : "");
 }
 
+napi_value JsGetDiagLogSize(napi_env env, napi_callback_info) {
+    napi_value out;
+    napi_create_double(env, static_cast<double>(mdiag::LogSizeBytes()), &out);
+    return out;
+}
+
+napi_value JsClearDiagLog(napi_env env, napi_callback_info) {
+    mdiag::ClearLog();
+    return nullptr;
+}
+
 napi_value JsLogUi(napi_env env, napi_callback_info info) {
     size_t argc = 1;
     napi_value args[1] = {nullptr};
@@ -1710,6 +1721,8 @@ static napi_value ModuleInit(napi_env env, napi_value exports) {
             {"getStats", nullptr, JsGetStats, nullptr, nullptr, nullptr, napi_default, nullptr},
             {"getStreamRxBytes", nullptr, JsGetStreamRxBytes, nullptr, nullptr, nullptr, napi_default, nullptr},
             {"logUi", nullptr, JsLogUi, nullptr, nullptr, nullptr, napi_default, nullptr},
+            {"getDiagLogSize", nullptr, JsGetDiagLogSize, nullptr, nullptr, nullptr, napi_default, nullptr},
+            {"clearDiagLog", nullptr, JsClearDiagLog, nullptr, nullptr, nullptr, napi_default, nullptr},
             {"setDiagEnabled", nullptr, JsSetDiagEnabled, nullptr, nullptr, nullptr, napi_default, nullptr},
             {"setVideoRange", nullptr, JsSetVideoRange, nullptr, nullptr, nullptr, napi_default, nullptr},
             {"sendControllerEvent", nullptr, JsSendControllerEvent, nullptr, nullptr, nullptr, napi_default, nullptr},

@@ -5,6 +5,13 @@ import { fileIo as fs } from '@kit.CoreFileKit';
 import { AppTheme } from '../common/AppTheme';
 import { MoonBridgeService } from '../services/MoonBridgeService';
 
+// getBuildInfo() 的返回结构，来自 bridge_napi.cpp 的 JsGetBuildInfo。
+interface BuildInfo {
+  core: string;
+  commit: string;
+  ohosArch: string;
+}
+
 @Component
 struct SnapSlider {
   @StorageLink('lightTheme') lightTheme: boolean = true;
@@ -355,6 +362,7 @@ struct SettingsPage {
   @State nativeH: number = 0;
   @StorageLink('devMode') devMode: boolean = false;
   @StorageLink('diagLogging') diagLogging: boolean = false;
+  @State diagSizeBytes: number = 0;
   private devTapCount: number = 0;
   private devTapLastMs: number = 0;
   @StorageLink('gamepadDeadzone') gamepadDeadzone: number = 7;
@@ -364,9 +372,20 @@ struct SettingsPage {
   @State pickerKind: string = '';
   @State pickerTitle: string = '';
   @State pickerOptions: string[] = [];
+  @State bundleVersion: string = '';
   private bridge: MoonBridgeService = MoonBridgeService.get();
   private pickerDialog: CustomDialogController | undefined = undefined;
   private sensitivityDialog: CustomDialogController | undefined = undefined;
+
+  private diagSizeText(): string {
+    if (this.diagSizeBytes < 1024) {
+      return this.diagSizeBytes.toString() + ' B';
+    }
+    if (this.diagSizeBytes < 1024 * 1024) {
+      return (this.diagSizeBytes / 1024).toFixed(1) + ' KB';
+    }
+    return (this.diagSizeBytes / 1048576).toFixed(2) + ' MB';
+  }
 
   private showTouchpadHelp(): void {
     AlertDialog.show({
@@ -426,12 +445,35 @@ struct SettingsPage {
       this.nativeH = 0;
     }
     bundleManager.setAlternateIcon(this.lightIcon ? 'light' : 'dark').catch(() => {});
+    this.diagSizeBytes = this.bridge.getDiagLogSize();
+    bundleManager.getBundleInfoForSelf(bundleManager.BundleFlag.GET_BUNDLE_INFO_DEFAULT)
+      .then((info: bundleManager.BundleInfo) => {
+        this.bundleVersion = info.versionName;
+      })
+      .catch(() => {});
     if (this.resPreset.length === 0) {
       if (this.streamWidth === 1280) { this.resPreset = '720'; }
       else if (this.streamWidth === 1920) { this.resPreset = '1080'; }
       else if (this.streamWidth === 2560) { this.resPreset = '1440'; }
       else if (this.streamWidth === 3840) { this.resPreset = '4k'; }
       else if (this.nativeW > 0 && this.streamWidth === this.nativeW) { this.resPreset = 'native'; }
+    }
+  }
+
+  // 标题里的版本号取自 app.json5，避免与代码里硬编码的字符串不同步。
+  private aboutVersionText(): string {
+    return this.bundleVersion.length > 0 ? 'HMLight V' + this.bundleVersion : 'HMLight';
+  }
+
+  // getBuildInfo() 返回的是 JSON，直接渲染会带引号和逗号并折行，这里转成一行人类可读文本。
+  private coreLine(): string {
+    try {
+      const raw: string = this.bridge.getBuildInfo();
+      const info = JSON.parse(raw) as BuildInfo;
+      const commit: string = info.commit.length > 7 ? info.commit.substring(0, 7) : info.commit;
+      return '内核 ' + info.core + ' ' + commit + ' · ' + info.ohosArch;
+    } catch (error) {
+      return '内核 moonlight-common-c';
     }
   }
 
@@ -1157,40 +1199,58 @@ struct SettingsPage {
           }
           .width('100%')
 
-          this.sectionTitle('关于')
-          Text('Moonlight HarmonyOS 移植版')
-            .fontSize(14)
-            .fontColor($r('app.color.app_text'))
-            .width('100%')
-            .onClick(() => {
-              const now: number = Date.now();
-              if (now - this.devTapLastMs > 1500) {
-                this.devTapCount = 0;
-              }
-              this.devTapLastMs = now;
-              this.devTapCount++;
-              if (this.devTapCount >= 5) {
-                this.devTapCount = 0;
-                this.devMode = true;
-                promptAction.showToast({ message: '开发者模式已开启' });
-              }
-            })
-          Text(this.bridge.getVersion()).fontSize(12).fontColor($r('app.color.app_text_dim')).width('100%')
-          Text(this.bridge.getBuildInfo()).fontSize(11).fontColor($r('app.color.app_text_dim')).width('100%')
-          Text('基于 Moonlight 开源项目（GPLv3）修改的 HarmonyOS 串流客户端，非官方版本。')
-            .fontSize(11).fontColor($r('app.color.app_text_dim')).width('100%').margin({ top: 4 })
-          Text('源码：https://github.com/Entai23/hmlight')
-            .fontSize(11).fontColor($r('app.color.app_primary')).width('100%')
-            .copyOption(CopyOptions.LocalDevice)
-            .onClick(() => {
-              (getContext(this) as common.UIAbilityContext)
-                .openLink('https://github.com/Entai23/hmlight')
-                .catch(() => {
-                  promptAction.showToast({ message: '无法打开浏览器，可长按复制链接' });
-                });
-            })
-          Text('本应用整体按 GNU GPLv3 授权发布，修改部分同样开源。')
-            .fontSize(11).fontColor($r('app.color.app_text_dim')).width('100%')
+          Column({ space: 6 }) {
+            this.sectionTitle('关于')
+            Text(this.aboutVersionText())
+              .fontSize(21)
+              .fontWeight(FontWeight.Medium)
+              .fontColor($r('app.color.app_text'))
+              .width('100%')
+              .textAlign(TextAlign.Start)
+            Text('Moonlight HarmonyOS 移植版')
+              .fontSize(16)
+              .fontColor($r('app.color.app_text_dim'))
+              .width('100%')
+            Text(this.coreLine())
+              .fontSize(11)
+              .lineHeight(16)
+              .fontColor($r('app.color.app_text_dim'))
+              .width('100%')
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+            // 以下三行与上面共用同一个 Column 的 space，保证行距一致；
+            // 不要给单个 Text 加 margin，否则会出现一块大一块小。
+            Text('基于 Moonlight 开源项目（GPLv3）修改的 HarmonyOS 串流客户端，非官方版本。')
+              .fontSize(11).fontColor($r('app.color.app_text_dim')).width('100%')
+            Text('源码：https://github.com/Entai23/hmlight')
+              .fontSize(11).fontColor($r('app.color.app_primary')).width('100%')
+              .copyOption(CopyOptions.LocalDevice)
+              .onClick(() => {
+                (getContext(this) as common.UIAbilityContext)
+                  .openLink('https://github.com/Entai23/hmlight')
+                  .catch(() => {
+                    promptAction.showToast({ message: '无法打开浏览器，可长按复制链接' });
+                  });
+              })
+            Text('本应用整体按 GNU GPLv3 授权发布，修改部分同样开源。')
+              .fontSize(11).fontColor($r('app.color.app_text_dim')).width('100%')
+          }
+          .width('100%')
+          .alignItems(HorizontalAlign.Start)
+          .padding({ top: 8, bottom: 8 })
+          .onClick(() => {
+            const now: number = Date.now();
+            if (now - this.devTapLastMs > 1500) {
+              this.devTapCount = 0;
+            }
+            this.devTapLastMs = now;
+            this.devTapCount++;
+            if (this.devTapCount >= 5) {
+              this.devTapCount = 0;
+              this.devMode = true;
+              promptAction.showToast({ message: '开发者模式已开启' });
+            }
+          })
           if (this.devMode) {
             Column({ space: 8 }) {
               Divider().color($r('app.color.app_divider'))
@@ -1205,6 +1265,10 @@ struct SettingsPage {
                   .onChange((isOn: boolean) => {
                     this.diagLogging = isOn;
                     this.bridge.setDiagEnabled(isOn && this.devMode);
+                    this.diagSizeBytes = this.bridge.getDiagLogSize();
+                    promptAction.showToast({
+                      message: isOn ? '日志记录已开启' : '日志记录已停止'
+                    });
                   })
               }
               .width('100%')
@@ -1213,6 +1277,23 @@ struct SettingsPage {
                 .fontColor($r('app.color.app_text_dim'))
                 .copyOption(CopyOptions.LocalDevice)
                 .width('100%')
+              Row() {
+                Text('当前占用：' + this.diagSizeText())
+                  .fontSize(12)
+                  .fontColor($r('app.color.app_text_dim'))
+                  .layoutWeight(1)
+                Button('清空日志')
+                  .height(32)
+                  .fontSize(12)
+                  .backgroundColor($r('app.color.app_button_bg'))
+                  .fontColor($r('app.color.app_text'))
+                  .onClick(() => {
+                    this.bridge.clearDiagLog();
+                    this.diagSizeBytes = this.bridge.getDiagLogSize();
+                    promptAction.showToast({ message: '日志已清空' });
+                  })
+              }
+              .width('100%')
               Button('关闭开发者模式')
                 .width('100%')
                 .height(42)
@@ -1222,7 +1303,7 @@ struct SettingsPage {
                   this.devMode = false;
                   this.diagLogging = false;
                   this.bridge.setDiagEnabled(false);
-                  promptAction.showToast({ message: '开发者模式已关闭，日志已停止写入' });
+                  promptAction.showToast({ message: '开发者模式已关闭' });
                 })
             }
             .width('100%')

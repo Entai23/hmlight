@@ -68,6 +68,9 @@ export class HostStore {
   }
 
   static remove(address: string): void {
+    if (AppStorage.get<string>('moonHost') === address) {
+      AppStorage.setOrCreate('moonHost', '');
+    }
     const list: HostEntry[] = HostStore.load();
     const kept: HostEntry[] = [];
     for (let i = 0; i < list.length; i++) {

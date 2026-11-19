@@ -6,6 +6,69 @@ import { fileIo as fs } from '@kit.CoreFileKit';
 import { HostEntry, HostStore } from '../services/HostStore';
 import { MoonBridgeService, MoonHostInfo } from '../services/MoonBridgeService';
 
+@CustomDialog
+struct HostMenuDialog {
+  controller?: CustomDialogController;
+  hostTitle: string = '';
+  onOpen: () => void = () => {};
+  onTest: () => void = () => {};
+  onDelete: () => void = () => {};
+  onDetails: () => void = () => {};
+
+  build() {
+    Column({ space: 2 }) {
+      Text(this.hostTitle)
+        .fontSize(17)
+        .fontColor($r('app.color.dialog_text'))
+        .fontWeight(FontWeight.Medium)
+        .margin({ bottom: 10 })
+      Row() {
+        Text('打开应用列表').fontSize(16).fontColor($r('app.color.dialog_text'))
+      }
+      .width('100%').height(46).justifyContent(FlexAlign.Center).borderRadius(10)
+      .onClick(() => {
+        if (this.controller !== undefined) { this.controller.close(); }
+        this.onOpen();
+      })
+      Row() {
+        Text('测试网络连接').fontSize(16).fontColor($r('app.color.dialog_text'))
+      }
+      .width('100%').height(46).justifyContent(FlexAlign.Center).borderRadius(10)
+      .onClick(() => {
+        if (this.controller !== undefined) { this.controller.close(); }
+        this.onTest();
+      })
+      Row() {
+        Text('查看详情').fontSize(16).fontColor($r('app.color.dialog_text'))
+      }
+      .width('100%').height(46).justifyContent(FlexAlign.Center).borderRadius(10)
+      .onClick(() => {
+        if (this.controller !== undefined) { this.controller.close(); }
+        this.onDetails();
+      })
+      Row() {
+        Text('删除电脑').fontSize(16).fontColor('#FF6B6B')
+      }
+      .width('100%').height(46).justifyContent(FlexAlign.Center).borderRadius(10)
+      .onClick(() => {
+        if (this.controller !== undefined) { this.controller.close(); }
+        this.onDelete();
+      })
+      Button('取消')
+        .width('100%').height(44).backgroundColor($r('app.color.dialog_btn'))
+        .fontColor($r('app.color.dialog_text'))
+        .margin({ top: 8 })
+        .onClick(() => {
+          if (this.controller !== undefined) { this.controller.close(); }
+        })
+    }
+    .padding(16)
+    .width(360)
+    .backgroundColor($r('app.color.dialog_bg'))
+    .borderRadius(16)
+  }
+}
+
 @Entry
 @Component
 struct Index {
@@ -18,6 +81,7 @@ struct Index {
   @State pairPin: string = '';
   @State pairStatus: string = '';
   @State helpVisible: boolean = false;
+  private hostMenuDialog: CustomDialogController | undefined = undefined;
   private bridge: MoonBridgeService = MoonBridgeService.get();
 
   @StorageLink('devMode') devMode: boolean = false;
@@ -72,13 +136,7 @@ struct Index {
   }
 
   async refreshHosts(): Promise<void> {
-    let list: HostEntry[] = HostStore.load();
-    if (list.length === 0) {
-      const last: string = HostStore.lastAddress();
-      if (last.length > 0) {
-        list = [new HostEntry('电脑', last, false, false)];
-      }
-    }
+    const list: HostEntry[] = HostStore.load();
     this.browsing = true;
     const updated: HostEntry[] = [];
     for (let i = 0; i < list.length; i++) {
@@ -174,6 +232,89 @@ struct Index {
     PageTransitionExit({ duration: 0, curve: Curve.Linear })
   }
 
+  private openHostMenu(host: HostEntry): void {
+    this.hostMenuDialog = new CustomDialogController({
+      builder: HostMenuDialog({
+        hostTitle: host.name,
+        onOpen: () => {
+          this.onHostClick(host);
+        },
+        onTest: () => {
+          this.testHost(host);
+        },
+        onDelete: () => {
+          this.confirmDeleteHost(host);
+        },
+        onDetails: () => {
+          this.showHostDetails(host);
+        }
+      }),
+      autoCancel: true,
+      customStyle: true,
+      alignment: DialogAlignment.Center
+    });
+    this.hostMenuDialog.open();
+  }
+
+  private async testHost(host: HostEntry): Promise<void> {
+    promptAction.showToast({ message: '正在测试连接...' });
+    const start: number = Date.now();
+    try {
+      const text: string = await this.bridge.getHostInfo(host.address);
+      const info = JSON.parse(text) as MoonHostInfo;
+      const ms: number = Date.now() - start;
+      promptAction.showToast({
+        message: info.online ? ('连接正常，耗时 ' + ms.toString() + ' ms')
+          : ('主机离线，耗时 ' + ms.toString() + ' ms')
+      });
+    } catch (error) {
+      promptAction.showToast({ message: '连接失败：' + JSON.stringify(error) });
+    }
+  }
+
+  private async showHostDetails(host: HostEntry): Promise<void> {
+    try {
+      const text: string = await this.bridge.getHostInfo(host.address);
+      const info = JSON.parse(text) as MoonHostInfo;
+      AlertDialog.show({
+        title: '主机详情',
+        message: '名称：' + (info.hostname.length > 0 ? info.hostname : host.name) +
+          '\n地址：' + host.address +
+          '\n状态：' + (info.online ? '在线' : '离线') +
+          '\n配对：' + (host.paired ? '已配对' : '未配对') +
+          '\n服务端版本：' + (info.appVersion.length > 0 ? info.appVersion : '未知'),
+        confirm: { value: '关闭', action: () => {} }
+      });
+    } catch (error) {
+      AlertDialog.show({
+        title: '主机详情',
+        message: '名称：' + host.name + '\n地址：' + host.address +
+          '\n状态：' + (host.online ? '在线' : '离线') +
+          '\n配对：' + (host.paired ? '已配对' : '未配对'),
+        confirm: { value: '关闭', action: () => {} }
+      });
+    }
+  }
+
+  private confirmDeleteHost(host: HostEntry): void {
+    AlertDialog.show({
+      title: '删除电脑',
+      message: '确定要删除 ' + host.name + '（' + host.address + '）吗？',
+      primaryButton: {
+        value: '删除',
+        action: () => {
+          HostStore.remove(host.address);
+          this.refreshHosts();
+          promptAction.showToast({ message: '已删除' });
+        }
+      },
+      secondaryButton: {
+        value: '取消',
+        action: () => {}
+      }
+    });
+  }
+
   build() {
     Stack() {
       Column() {
@@ -229,12 +370,14 @@ struct Index {
                 Column() {
                   Stack() {
                     Image($r('app.media.ic_computer'))
+                      .draggable(false)
                       .width(AppTheme.pcIconSize)
                       .height(AppTheme.pcIconSize)
                       .opacity(host.online ? 1.0 : 0.4)
                       .fillColor($r('app.color.app_text'))
                     if (host.online && !host.paired) {
                       Image($r('app.media.ic_lock'))
+                        .draggable(false)
                         .width(50)
                         .height(50)
                         .margin({ top: 28 })
@@ -242,6 +385,7 @@ struct Index {
                     }
                     if (!host.online) {
                       Image($r('app.media.ic_pc_offline'))
+                        .draggable(false)
                         .width(50)
                         .height(50)
                         .margin({ top: 28 })
@@ -270,9 +414,8 @@ struct Index {
                 this.onHostClick(host);
               })
               .gesture(
-                LongPressGesture().onAction(() => {
-                  HostStore.remove(host.address);
-                  this.refreshHosts();
+                LongPressGesture({ repeat: false, duration: 500 }).onAction(() => {
+                  this.openHostMenu(host);
                 })
               )
             }, (host: HostEntry) => host.address)

@@ -36,6 +36,8 @@ export interface MoonBridgeModule {
   getStats(): string;
   getStreamRxBytes(): number;
   logUi(message: string): void;
+  getDiagLogSize(): number;
+  clearDiagLog(): void;
   setDiagEnabled(on: boolean): void;
   setVideoRange(full: number): void;
   sendControllerEvent(flags: number, lt: number, rt: number, lx: number, ly: number, rx: number, ry: number): void;

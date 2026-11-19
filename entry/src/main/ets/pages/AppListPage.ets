@@ -32,8 +32,6 @@ class AppItem {
 struct AppCard {
   @StorageLink('lightTheme') lightTheme: boolean = true;
   @ObjectLink item: AppItem;
-  editing: boolean = false;
-  wobbleAngle: number = 0;
 
   pageTransition() {
     PageTransitionEnter({ duration: 0, curve: Curve.Linear })
@@ -45,6 +43,7 @@ struct AppCard {
       Stack({ alignContent: Alignment.Bottom }) {
         if (this.item.image !== undefined) {
           Image(this.item.image)
+            .draggable(false)
             .width('100%')
             .height('100%')
             .objectFit(ImageFit.Cover)
@@ -62,6 +61,7 @@ struct AppCard {
         if (this.item.running) {
           Column() {
             Image($r('app.media.ic_play'))
+              .draggable(false)
               .width(40)
               .height(40)
               .fillColor(Color.White)
@@ -88,7 +88,63 @@ struct AppCard {
     .width(150)
     .height(200)
     .margin(6)
-    .rotate({ angle: this.wobbleAngle })
+  }
+}
+
+@CustomDialog
+struct AppMenuDialog {
+  controller?: CustomDialogController;
+  appTitle: string = '';
+  onCover: () => void = () => {};
+  onDetails: () => void = () => {};
+  showReset: boolean = false;
+  onReset: () => void = () => {};
+
+  build() {
+    Column({ space: 2 }) {
+      Text(this.appTitle)
+        .fontSize(17)
+        .fontColor($r('app.color.dialog_text'))
+        .fontWeight(FontWeight.Medium)
+        .margin({ bottom: 10 })
+      Row() {
+        Text('更换封面').fontSize(16).fontColor($r('app.color.dialog_text'))
+      }
+      .width('100%').height(46).justifyContent(FlexAlign.Center).borderRadius(10)
+      .onClick(() => {
+        if (this.controller !== undefined) { this.controller.close(); }
+        this.onCover();
+      })
+      Row() {
+        Text('查看详情').fontSize(16).fontColor($r('app.color.dialog_text'))
+      }
+      .width('100%').height(46).justifyContent(FlexAlign.Center).borderRadius(10)
+      .onClick(() => {
+        if (this.controller !== undefined) { this.controller.close(); }
+        this.onDetails();
+      })
+      if (this.showReset) {
+        Row() {
+          Text('还原封面').fontSize(16).fontColor('#FF6B6B')
+        }
+        .width('100%').height(46).justifyContent(FlexAlign.Center).borderRadius(10)
+        .onClick(() => {
+          if (this.controller !== undefined) { this.controller.close(); }
+          this.onReset();
+        })
+      }
+      Button('取消')
+        .width('100%').height(44).backgroundColor($r('app.color.dialog_btn'))
+        .fontColor($r('app.color.dialog_text'))
+        .margin({ top: 8 })
+        .onClick(() => {
+          if (this.controller !== undefined) { this.controller.close(); }
+        })
+    }
+    .padding(16)
+    .width(360)
+    .backgroundColor($r('app.color.dialog_bg'))
+    .borderRadius(16)
   }
 }
 
@@ -265,17 +321,15 @@ struct AppListPage {
   @State loading: boolean = true;
   @State errorText: string = '';
   @State runningGameId: number = 0;
-  @State editMode: boolean = false;
   @StorageLink('confirmLaunch') confirmLaunch: boolean = true;
   @State gridTemplate: string = '1fr 1fr 1fr 1fr 1fr 1fr';
-  @State wobbleAngle: number = 0;
-  private wobbleTimer: number = -1;
   @State menuTitle: string = '';
   @State menuAppId: number = 0;
   private runningDialog: CustomDialogController | undefined = undefined;
   private busyDialog: CustomDialogController | undefined = undefined;
   private confirmDialog: CustomDialogController | undefined = undefined;
   private bridge: MoonBridgeService = MoonBridgeService.get();
+  private menuDialog: CustomDialogController | undefined = undefined;
 
   aboutToAppear(): void {
     this.bridge.ensureInit(getContext(this).filesDir);
@@ -558,41 +612,48 @@ struct AppListPage {
     });
   }
 
-  private setEditMode(on: boolean): void {
-    this.editMode = on;
-    if (this.wobbleTimer > 0) {
-      clearInterval(this.wobbleTimer);
-      this.wobbleTimer = -1;
+  private showCoverMenu(item: AppItem): void {
+    let hasCustom: boolean = false;
+    try {
+      hasCustom = fs.accessSync(this.coverPath(item.id));
+    } catch (error) {
+      hasCustom = false;
     }
-    if (on) {
-      this.wobbleTimer = setInterval(() => {
-        animateTo({ duration: 140, curve: Curve.EaseInOut }, () => {
-          this.wobbleAngle = this.wobbleAngle > 0 ? -1.2 : 1.2;
-        });
-      }, 160);
-    } else {
-      animateTo({ duration: 160, curve: Curve.EaseOut }, () => {
-        this.wobbleAngle = 0;
-      });
-    }
+    const dlg = new CustomDialogController({
+      builder: AppMenuDialog({
+        appTitle: item.title,
+        showReset: hasCustom,
+        onCover: () => {
+          if (this.menuDialog !== undefined) {
+            this.menuDialog.close();
+          }
+          setTimeout(() => {
+            this.pickCover(item);
+          }, 320);
+        },
+        onDetails: () => {
+          this.showAppDetails(item);
+        },
+        onReset: () => {
+          this.resetCover(item);
+          promptAction.showToast({ message: '封面已还原' });
+        }
+      }),
+      autoCancel: true,
+      customStyle: true,
+      alignment: DialogAlignment.Center
+    });
+    this.menuDialog = dlg;
+    dlg.open();
   }
 
-  private showCoverMenu(item: AppItem): void {
+  private showAppDetails(item: AppItem): void {
     AlertDialog.show({
-      title: item.title,
-      message: '编辑应用封面',
-      primaryButton: {
-        value: '更换封面',
-        action: () => {
-          this.pickCover(item);
-        }
-      },
-      secondaryButton: {
-        value: '恢复默认',
-        action: () => {
-          this.resetCover(item);
-        }
-      }
+      title: '应用详情',
+      message: '名称：' + item.title +
+        '\nHDR 支持：' + (item.hdr ? '是' : '未知') +
+        '\n应用 ID：' + item.id.toString(),
+      confirm: { value: '关闭', action: () => {} }
     });
   }
 
@@ -605,7 +666,6 @@ struct AppListPage {
           .fontColor($r('app.color.app_text'))
           .padding({ left: 16, right: 16 })
           .onClick(() => {
-            this.setEditMode(false);
             router.back();
           })
         Text(this.hostName)
@@ -614,13 +674,6 @@ struct AppListPage {
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .layoutWeight(1)
-        Text(this.editMode ? '完成' : '编辑')
-          .fontSize(16)
-          .fontColor(this.editMode ? $r('app.color.app_primary') : $r('app.color.app_text'))
-          .padding({ left: 12, right: 12 })
-          .onClick(() => {
-            this.setEditMode(!this.editMode);
-          })
         Text('⟳')
           .fontSize(26)
           .fontColor($r('app.color.app_text'))
@@ -631,16 +684,6 @@ struct AppListPage {
       }
       .width('100%')
       .height(65)
-
-      if (this.editMode) {
-        Text('正在编辑：点击任意应用封面进行更换')
-          .fontSize(13)
-          .fontColor($r('app.color.dialog_text'))
-          .width('100%')
-          .textAlign(TextAlign.Center)
-          .padding(8)
-          .backgroundColor($r('app.color.app_primary'))
-      }
 
       if (this.loading) {
         Column({ space: 12 }) {
@@ -664,13 +707,13 @@ struct AppListPage {
         Grid() {
           ForEach(this.apps, (item: AppItem) => {
             GridItem() {
-              AppCard({ item: item, editing: this.editMode, wobbleAngle: this.wobbleAngle })
+              AppCard({ item: item })
             }
-            .onClick(() => {
-              if (this.editMode) {
+            .gesture(LongPressGesture({ repeat: false, duration: 500 })
+              .onAction(() => {
                 this.showCoverMenu(item);
-                return;
-              }
+              }))
+            .onClick(() => {
               if (item.id === this.runningGameId) {
                 this.openRunningMenu(item);
               } else if (this.runningGameId !== 0) {

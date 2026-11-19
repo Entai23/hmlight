@@ -13,6 +13,8 @@ void EventJson(const char* category, const std::string& jsonFields);
 std::string JsonEscape(const std::string& in);
 uint64_t NowUs();
 std::string LogFilePath();
+uint64_t LogSizeBytes();
+void ClearLog();
 
 } // namespace mdiag
 

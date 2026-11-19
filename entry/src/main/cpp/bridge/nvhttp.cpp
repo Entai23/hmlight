@@ -16,6 +16,9 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <cerrno>
 #include <sys/time.h>
 #include <unistd.h>
 
@@ -188,6 +191,57 @@ HttpResult ParseResponse(const std::string& raw) {
     return result;
 }
 
+static int ConnectTcpWithTimeout(const std::string& host, int port, int timeoutMs, int* outFd) {
+    struct addrinfo hints;
+    memset(&hints, 0, sizeof(hints));
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    char portStr[8];
+    snprintf(portStr, sizeof(portStr), "%d", port);
+
+    struct addrinfo* res = nullptr;
+    if (getaddrinfo(host.c_str(), portStr, &hints, &res) != 0 || res == nullptr) {
+        return -1;
+    }
+
+    int result = -1;
+    for (struct addrinfo* ai = res; ai != nullptr; ai = ai->ai_next) {
+        int fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
+        if (fd < 0) {
+            continue;
+        }
+        int flags = fcntl(fd, F_GETFL, 0);
+        fcntl(fd, F_SETFL, flags | O_NONBLOCK);
+        int rc = connect(fd, ai->ai_addr, ai->ai_addrlen);
+        if (rc != 0 && errno != EINPROGRESS) {
+            close(fd);
+            continue;
+        }
+        if (rc != 0) {
+            struct pollfd pfd;
+            pfd.fd = fd;
+            pfd.events = POLLOUT;
+            pfd.revents = 0;
+            if (poll(&pfd, 1, timeoutMs) <= 0) {
+                close(fd);
+                continue;
+            }
+            int err = 0;
+            socklen_t len = sizeof(err);
+            if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) != 0 || err != 0) {
+                close(fd);
+                continue;
+            }
+        }
+        fcntl(fd, F_SETFL, flags);
+        *outFd = fd;
+        result = 0;
+        break;
+    }
+    freeaddrinfo(res);
+    return result;
+}
+
 HttpResult HttpGetPlain(const std::string& host, int port, const std::string& url, int timeoutMs) {
     HttpResult result;
     struct addrinfo hints;
@@ -204,28 +258,17 @@ HttpResult HttpGetPlain(const std::string& host, int port, const std::string& ur
         return result;
     }
 
-    int fd = -1;
-    for (struct addrinfo* ai = res; ai != nullptr; ai = ai->ai_next) {
-        fd = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
-        if (fd < 0) {
-            continue;
-        }
-        struct timeval tv;
-        tv.tv_sec = timeoutMs / 1000;
-        tv.tv_usec = (timeoutMs % 1000) * 1000;
-        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
-        setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
-        if (connect(fd, ai->ai_addr, ai->ai_addrlen) == 0) {
-            break;
-        }
-        close(fd);
-        fd = -1;
-    }
     freeaddrinfo(res);
-    if (fd < 0) {
+    int fd = -1;
+    if (ConnectTcpWithTimeout(host, port, timeoutMs, &fd) != 0) {
         result.error = "connect";
         return result;
     }
+    struct timeval tv;
+    tv.tv_sec = timeoutMs / 1000;
+    tv.tv_usec = (timeoutMs % 1000) * 1000;
+    setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
 
     char req[8192];
     snprintf(req, sizeof(req),
@@ -281,12 +324,13 @@ HttpResult HttpGetTls(const std::string& host, int port, const std::string& url,
     mbedtls_ssl_config_init(&conf);
 
     do {
-        int rc = mbedtls_net_connect(&server, host.c_str(), std::to_string(port).c_str(),
-                                     MBEDTLS_NET_PROTO_TCP);
-        if (rc != 0) {
+        int tcpFd = -1;
+        if (ConnectTcpWithTimeout(host, port, timeoutMs, &tcpFd) != 0) {
             result.error = "connect";
             break;
         }
+        server.fd = tcpFd;
+        int rc = 0;
         struct timeval tv;
         tv.tv_sec = timeoutMs / 1000;
         tv.tv_usec = (timeoutMs % 1000) * 1000;

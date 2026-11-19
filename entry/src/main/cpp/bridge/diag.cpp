@@ -9,6 +9,8 @@
 #include <mutex>
 #include <atomic>
 #include <sys/stat.h>
+#include <unistd.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <unistd.h>
 
@@ -173,6 +175,36 @@ void EventJson(const char* category, const std::string& jsonFields) {
     }
     line += "}";
     WriteLineUnlocked(line, LOG_INFO);
+}
+
+} // namespace mdiag
+
+namespace mdiag {
+
+uint64_t LogSizeBytes() {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    struct stat st;
+    if (g_path.empty() || stat(g_path.c_str(), &st) != 0) {
+        return 0;
+    }
+    return static_cast<uint64_t>(st.st_size);
+}
+
+void ClearLog() {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    if (g_file) {
+        fclose(g_file);
+        g_file = nullptr;
+    }
+    if (!g_path.empty()) {
+        unlink(g_path.c_str());
+        if (g_enabled.load()) {
+            g_file = fopen(g_path.c_str(), "a");
+            if (g_file) {
+                setvbuf(g_file, nullptr, _IOLBF, 0);
+            }
+        }
+    }
 }
 
 } // namespace mdiag

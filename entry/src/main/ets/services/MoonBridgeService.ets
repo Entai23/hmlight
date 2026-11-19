@@ -99,6 +99,14 @@ export class MoonBridgeService {
     moonbridge.logUi(message);
   }
 
+  getDiagLogSize(): number {
+    return moonbridge.getDiagLogSize();
+  }
+
+  clearDiagLog(): void {
+    moonbridge.clearDiagLog();
+  }
+
   setDiagEnabled(on: boolean): void {
     moonbridge.setDiagEnabled(on);
   }
