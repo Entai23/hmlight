@@ -1130,7 +1130,7 @@ struct SettingsPage {
                 } catch (error) {
                 }
                 bundleManager.setAlternateIcon(isOn ? 'light' : 'dark').catch(() => {});
-                const bg: string = isOn ? '#F5F7FA' : '#000000';
+                const bg: string = isOn ? '#F5F7FA' : '#36393F';
                 const fg: string = isOn ? '#000000' : '#FFFFFF';
                 window.getLastWindow(getContext(this)).then((win: window.Window) => {
                   win.setWindowBackgroundColor(bg);

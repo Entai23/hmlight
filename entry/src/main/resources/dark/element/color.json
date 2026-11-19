@@ -2,11 +2,11 @@
   "color": [
     {
       "name": "app_background",
-      "value": "#000000"
+      "value": "#36393F"
     },
     {
       "name": "app_surface",
-      "value": "#1F1F1F"
+      "value": "#3F434A"
     },
     {
       "name": "app_primary",
@@ -18,7 +18,7 @@
     },
     {
       "name": "app_text_dim",
-      "value": "#B0B0B0"
+      "value": "#B4B8C0"
     },
     {
       "name": "app_divider",
@@ -26,15 +26,15 @@
     },
     {
       "name": "app_button_bg",
-      "value": "#333333"
+      "value": "#4A4E56"
     },
     {
       "name": "app_card_bg",
-      "value": "#222222"
+      "value": "#42464D"
     },
     {
       "name": "dialog_bg",
-      "value": "#141414"
+      "value": "#3F434A"
     },
     {
       "name": "dialog_text",
@@ -42,11 +42,11 @@
     },
     {
       "name": "dialog_btn",
-      "value": "#2C2C2E"
+      "value": "#4A4E56"
     },
     {
       "name": "start_window_background",
-      "value": "#000000"
+      "value": "#36393F"
     }
   ]
 }

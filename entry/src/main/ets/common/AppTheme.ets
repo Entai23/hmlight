@@ -1,12 +1,12 @@
 export class AppTheme {
-  static background: string = '#000000';
-  static surface: string = '#1F1F1F';
+  static background: string = '#36393F';
+  static surface: string = '#3F434A';
   static primary: string = '#00B4D8';
   static text: string = '#FFFFFF';
-  static textDim: string = '#B0B0B0';
+  static textDim: string = '#B4B8C0';
   static divider: string = '#33FFFFFF';
-  static buttonBg: string = '#333333';
-  static cardBg: string = '#222222';
+  static buttonBg: string = '#4A4E56';
+  static cardBg: string = '#42464D';
   static readonly pcIconSize: number = 125;
   static readonly appPosterWidth: number = 150;
   static readonly appPosterHeight: number = 200;

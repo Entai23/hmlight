@@ -64,7 +64,7 @@ export default class EntryAbility extends UIAbility {
   private applySystemBars(windowStage: window.WindowStage): void {
     windowStage.getMainWindow().then((win: window.Window) => {
       const light: boolean = this.readThemeFile();
-      const bg: string = light ? '#F5F7FA' : '#000000';
+      const bg: string = light ? '#F5F7FA' : '#36393F';
       const fg: string = light ? '#000000' : '#FFFFFF';
       win.setWindowLayoutFullScreen(false).catch(() => {});
       win.setWindowBackgroundColor(bg);

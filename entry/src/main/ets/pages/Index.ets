@@ -89,7 +89,7 @@ struct Index {
 
   private applyBars(): void {
     const light: boolean = this.lightTheme;
-    const bg: string = light ? '#F5F7FA' : '#000000';
+    const bg: string = light ? '#F5F7FA' : '#36393F';
     const fg: string = light ? '#000000' : '#FFFFFF';
     window.getLastWindow(getContext(this)).then((win: window.Window) => {
       win.setWindowBackgroundColor(bg);
