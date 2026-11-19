@@ -333,12 +333,75 @@ struct AppListPage {
 
   aboutToAppear(): void {
     this.bridge.ensureInit(getContext(this).filesDir);
+    AssetLoader.setCacheDir(getContext(this).filesDir + '/assets');
     const params = router.getParams() as RouteParams;
     if (params !== undefined && params.address !== undefined && params.address.length > 0) {
       this.hostAddress = params.address;
     }
     this.hostName = this.hostAddress;
-    this.loadApps();
+    // Show the last successful list immediately, then refresh in background.
+    const hasCache: boolean = this.loadCachedApps();
+    this.loading = !hasCache;
+    this.loadApps(hasCache);
+  }
+
+  private cacheFilePath(): string {
+    const dir: string = getContext(this).filesDir + '/cache';
+    try {
+      if (!fs.accessSync(dir)) {
+        fs.mkdirSync(dir);
+      }
+    } catch (error) {
+    }
+    const safeHost: string = this.hostAddress.replace(/[^A-Za-z0-9]/g, '_');
+    return dir + '/applist_' + safeHost + '.json';
+  }
+
+  private async hydrateOne(item: AppItem): Promise<void> {
+    if (item.image !== undefined) {
+      return;
+    }
+    const custom = this.loadCustomCover(item.id);
+    if (custom !== undefined) {
+      item.image = custom;
+      return;
+    }
+    const pm = await AssetLoader.load(this.hostAddress, item.id);
+    if (pm !== undefined) {
+      item.image = pm;
+    }
+  }
+
+  private async hydrateImages(items: AppItem[]): Promise<void> {
+    const tasks: Promise<void>[] = [];
+    for (let i = 0; i < items.length; i++) {
+      tasks.push(this.hydrateOne(items[i]));
+    }
+    await Promise.all(tasks);
+  }
+
+  private loadCachedApps(): boolean {
+    try {
+      const path: string = this.cacheFilePath();
+      if (!fs.accessSync(path)) {
+        return false;
+      }
+      const content: string = fs.readTextSync(path);
+      const list = JSON.parse(content) as MoonAppList;
+      if (list.apps.length === 0) {
+        return false;
+      }
+      const items: AppItem[] = [];
+      for (let i = 0; i < list.apps.length; i++) {
+        const app: MoonApp = list.apps[i];
+        items.push(new AppItem(app.id, app.title, app.hdr));
+      }
+      this.apps = items;
+      this.hydrateImages(items);
+      return true;
+    } catch (error) {
+      return false;
+    }
   }
 
   onPageShow(): void {
@@ -404,8 +467,10 @@ struct AppListPage {
     });
   }
 
-  async loadApps(): Promise<void> {
-    this.loading = true;
+  async loadApps(background: boolean = false): Promise<void> {
+    if (!background) {
+      this.loading = true;
+    }
     this.errorText = '';
     try {
       const text: string = await this.bridge.getHostInfo(this.hostAddress);
@@ -415,6 +480,15 @@ struct AppListPage {
       }
       const listText: string = await this.bridge.getAppList(this.hostAddress);
       const list = JSON.parse(listText) as MoonAppList;
+      if (list.apps.length > 0) {
+        try {
+          const out = fs.openSync(this.cacheFilePath(),
+            fs.OpenMode.CREATE | fs.OpenMode.WRITE_ONLY | fs.OpenMode.TRUNC);
+          fs.writeSync(out.fd, listText);
+          fs.closeSync(out);
+        } catch (error) {
+        }
+      }
       if (list.error.length > 0) {
         this.errorText = list.error;
       }
@@ -427,18 +501,7 @@ struct AppListPage {
         items.push(item);
       }
       this.apps = items;
-      for (let i = 0; i < items.length; i++) {
-        const item: AppItem = items[i];
-        const custom = this.loadCustomCover(item.id);
-        if (custom !== undefined) {
-          item.image = custom;
-        } else {
-          const pm = await AssetLoader.load(this.hostAddress, item.id);
-          if (pm !== undefined) {
-            item.image = pm;
-          }
-        }
-      }
+      await this.hydrateImages(items);
     } catch (error) {
       this.errorText = JSON.stringify(error);
     }
