@@ -8,7 +8,7 @@ HarmonyOS NEXT 上的 Moonlight 游戏串流客户端。
 > 的协议实现修改而来，与 Moonlight 官方不存在隶属、赞助或背书关系。
 > 项目名称、图标均为自有，不使用 Moonlight 的名称与图标作为产品标识。
 
-当前版本：**v0.1.2** · 已在 HUAWEI MatePad Pro（HarmonyOS NEXT）上验证
+当前版本：**v0.1.3** · 已在 HUAWEI MatePad Pro（HarmonyOS NEXT）上验证
 
 ---
 
@@ -25,7 +25,7 @@ HarmonyOS NEXT 上的 Moonlight 游戏串流客户端。
 
 - 视频解码：H.264 / H.265(HEVC) 硬件解码，Native AVCodec 直接输出到 Surface，无额外拷贝
   - 可在「设置 → 视频编码」切换：自动 / 仅 H.264 / 仅 HEVC，默认「自动」由主机协商
-  - HEVC 需要主机端（Sunshine）同时启用，否则会回落到 H.264
+  - HEVC 需要主机端（Sunshine / Apollo）同时启用，否则会回落到 H.264
 - 音频：Opus 多流解码 + OHAudio 低延迟输出，支持立体声 / 5.1 / 7.1
 - 输入：触摸（含触控板模式）、物理手柄，可调死区与翻转
 - 可调分辨率 / 帧率 / 码率，支持原生分辨率与自定义缩放
@@ -63,7 +63,7 @@ ArkTS (UI)  ──NAPI──▶  C++ bridge  ──▶  moonlight-common-c
 | 开发环境 | DevEco Studio，HarmonyOS SDK **26.0.0** 及以上 |
 | 编译目标 | `compatibleSdkVersion 26.0.0` / `targetSdkVersion 26.0.1` |
 | 设备 | HarmonyOS NEXT 手机或平板，**arm64-v8a** |
-| 服务端 | [Sunshine](https://github.com/LizardByte/Sunshine)（NVIDIA GameStream 已停止服务） |
+| 服务端 | [Sunshine](https://github.com/LizardByte/Sunshine) 或 [Apollo](https://github.com/ClassicOldSong/Apollo)（均为 GameStream 兼容服务端；NVIDIA GameStream 已停止服务） |
 
 > 本工程只编译 `arm64-v8a`，不支持 32 位设备。
 
