@@ -1,22 +1,60 @@
 # HMLight
 
+![HMLight](docs/social-preview.jpg)
+
 HarmonyOS NEXT 上的 Moonlight 游戏串流客户端。
 
 > **非官方项目。** 本项目基于 [Moonlight](https://github.com/moonlight-stream/moonlight-common-c)
 > 的协议实现修改而来，与 Moonlight 官方不存在隶属、赞助或背书关系。
 > 项目名称、图标均为自有，不使用 Moonlight 的名称与图标作为产品标识。
 
+当前版本：**v0.1.2** · 已在 HUAWEI MatePad Pro（HarmonyOS NEXT）上验证
+
 ---
 
 ## 特性
 
-- 主机管理：手动添加 IP、配对、长按删除
-- 应用列表：从主机拉取可串流应用，支持自定义封面
-- 串流：H.264 / H.265 硬件解码（AVCodec → Surface 零拷贝），支持 1080p 及更高分辨率
-- 音频：Opus 解码 + OHAudio 低延迟输出，支持立体声 / 5.1 / 7.1
-- 输入：触摸（虚拟鼠标）、物理手柄
-- 界面：浅色 / 深色主题，深浅色两套应用图标
-- 诊断：开发者模式下可开启 JSONL 日志（默认关闭，不写入任何网络内容）
+**连接与配对**
+
+- 手动添加主机 IP，标准 4 位 PIN 配对流程
+- 长按主机卡片弹出菜单：打开应用列表 / 测试网络连接 / 查看详情 / 删除电脑
+- 删除带二次确认；删除当前主机时同步清理"最后使用地址"
+- 连接测试带超时控制，不可达地址不会长时间卡在"刷新中"
+
+**串流**
+
+- 视频解码：H.264 / H.265(HEVC) 硬件解码，Native AVCodec 直接输出到 Surface，无额外拷贝
+  - 可在「设置 → 视频编码」切换：自动 / 仅 H.264 / 仅 HEVC，默认「自动」由主机协商
+  - HEVC 需要主机端（Sunshine）同时启用，否则会回落到 H.264
+- 音频：Opus 多流解码 + OHAudio 低延迟输出，支持立体声 / 5.1 / 7.1
+- 输入：触摸（含触控板模式）、物理手柄，可调死区与翻转
+- 可调分辨率 / 帧率 / 码率，支持原生分辨率与自定义缩放
+
+**界面**
+
+- 浅色 / 深色主题，两套独立图标与配色
+- 应用列表支持自定义封面（裁剪、还原）
+- 本地缓存：应用列表与封面落盘，二次进入秒开，随后后台刷新
+
+**诊断**
+
+- 开发者模式（设置页连点版本号 5 次开启）
+- 诊断日志独立开关，可查看占用大小并一键清空
+- 日志仅在本机沙箱，不含串流画面与网络内容
+
+## 技术架构
+
+```
+ArkTS (UI)  ──NAPI──▶  C++ bridge  ──▶  moonlight-common-c
+                          │
+                          ├─ AVCodec (视频硬解 → Surface)
+                          ├─ OHAudio (音频输出)
+                          └─ mbedTLS (mTLS / 配对)
+```
+
+- 界面：ArkTS / ArkUI，页面与状态均在 `entry/src/main/ets`
+- 协议：`moonlight-common-c` 原样复用，仅新增一个 UDP 计数接口
+- 桥接：`entry/src/main/cpp/bridge`，通过 NAPI 暴露给 ArkTS
 
 ## 环境要求
 
@@ -49,13 +87,16 @@ hvigorw assembleHap --mode module -p product=default
 ```
 AppScope/                  应用级配置与图标资源
 entry/
-  src/main/ets/            ArkTS 界面与服务（页面、主题、主机存储、NAPI 封装）
-  src/main/resources/      字符串、颜色、图标、启动页
+  src/main/ets/            ArkTS 界面与服务
+    pages/                 首页 / 应用列表 / 串流 / 设置 / 帮助 / 封面裁剪
+    services/              主机存储、NAPI 封装、封面加载与缓存
+    common/                主题与路由参数
+  src/main/resources/      字符串、颜色、深浅色图标、启动页
   src/main/cpp/
     CMakeLists.txt         原生构建入口
     bridge/                NAPI 桥：nvhttp / videodec / audiodec / gamepad / diag
     types/                 NAPI 类型声明（libmoonbridge）
-    third_party/           随仓库分发的第三方源码（见下）
+    third_party/           随仓库分发的第三方源码
 patches/                   对 upstream 的补丁
 scripts/                   依赖拉取与诊断采集脚本
 Icon/                      图标设计稿
@@ -83,20 +124,21 @@ Icon/                      图标设计稿
 
 相对 upstream 的主要修改：
 
-- `third_party/moonlight-common-c/src/PlatformSockets.c`
-  新增 UDP 接收字节计数接口（供诊断页统计码率）
-- `bridge/nvhttp.cpp`
-  mTLS 客户端证书生成与持久化、配对流程、`launch` / `appasset` 请求、UDP 读取上限修正
-- `bridge/videodec.cpp`
-  改用 HarmonyOS Native AVCodec + Surface 输出，加入关键帧等待与色彩范围处理
-- `bridge/audiodec.cpp`
-  Opus 多流解码 + OHAudio 输出，支持立体声 / 5.1 / 7.1
-- `bridge/bridge_napi.cpp`
-  NAPI 桥接层、输入事件、控制器、诊断接口
-- `bridge/diag.cpp`
-  JSONL 诊断日志（默认关闭，仅在开发者模式开启）
-- `entry/src/main/ets/**`
-  全部界面：主页、应用列表、串流页、设置、帮助、封面裁剪、主题
+| 文件 | 修改 |
+| --- | --- |
+| `third_party/moonlight-common-c/src/PlatformSockets.c` | 新增 UDP 接收字节计数接口，供诊断页统计码率 |
+| `bridge/nvhttp.cpp` | mTLS 客户端证书生成与持久化、配对流程、`launch` / `appasset` 请求、UDP 读取上限修正、非阻塞连接与超时 |
+| `bridge/videodec.cpp` | 改用 HarmonyOS Native AVCodec + Surface 输出，加入关键帧等待与色彩范围处理 |
+| `bridge/audiodec.cpp` | Opus 多流解码 + OHAudio 输出，支持立体声 / 5.1 / 7.1 |
+| `bridge/bridge_napi.cpp` | NAPI 桥接层、输入事件、控制器、诊断与统计接口 |
+| `bridge/diag.cpp` | JSONL 诊断日志，支持查询大小与清空 |
+| `entry/src/main/ets/**` | 全部界面与本地缓存实现 |
+
+## 隐私
+
+- 仅申请 `ohos.permission.INTERNET`，无定位、无通讯录、无存储权限
+- 诊断日志默认关闭，仅写入应用沙箱，不会上传
+- 配对证书保存在应用私有目录
 
 ## 许可证
 
@@ -109,11 +151,11 @@ Icon/                      图标设计稿
 
 - 仅支持 arm64-v8a
 - 未实现 HDR 串流
-- 未实现自动发现（需手动输入主机 IP）
+- 未实现局域网自动发现（需手动输入主机 IP）
 - 未实现多显示器 / 多会话切换
-- 诊断日志默认关闭，需在设置页连点版本号进入开发者模式后开启
+- 手机端布局已适配，但仅在平板上做过完整功能验证
 
 ## 反馈
 
-欢迎提交 Issue。涉及串流问题请附上：设备型号、HarmonyOS 版本、服务端类型与版本、
+欢迎提交 Issue。涉及串流问题请附上：设备型号、HarmonyOS 版本、服务端类型与版本，
 以及开发者模式导出的诊断日志（请先自行检查其中是否包含不希望公开的网络信息）。
