@@ -33,7 +33,7 @@ struct HelpPage {
           Text('快速开始').fontSize(17).fontColor($r('app.color.app_primary')).width('100%')
           Text('1. 在电脑上安装并启动 Apollo / Sunshine 串流服务端\n' +
             '2. 确保平板与电脑连接到同一个局域网\n' +
-            '3. 点击首页右上角 + 添加电脑 IP（或等待自动发现）\n' +
+            '3. 点击首页右上角 + 手动输入电脑 IP\n' +
             '4. 点击电脑卡片完成配对：客户端显示 4 位 PIN，在电脑端输入\n' +
             '5. 进入应用列表，点击应用开始串流').fontSize(14).fontColor($r('app.color.app_text')).width('100%')
 

@@ -127,10 +127,10 @@ struct StreamPage {
       return;
     }
     const params = router.getParams() as RouteParams;
-    if (params !== undefined) {
+    if (params !== undefined && params.address !== undefined) {
       this.address = params.address;
-      this.appId = params.appId;
-      this.appTitle = params.appTitle;
+      this.appId = params.appId ?? 0;
+      this.appTitle = params.appTitle ?? '';
     }
     this.enterFullscreen();
     this.bridge.setEventCallback((type: string, payload: string) => {

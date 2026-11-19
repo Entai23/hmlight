@@ -280,7 +280,7 @@ struct AppListPage {
   aboutToAppear(): void {
     this.bridge.ensureInit(getContext(this).filesDir);
     const params = router.getParams() as RouteParams;
-    if (params !== undefined && params.address.length > 0) {
+    if (params !== undefined && params.address !== undefined && params.address.length > 0) {
       this.hostAddress = params.address;
     }
     this.hostName = this.hostAddress;
