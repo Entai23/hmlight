@@ -2,9 +2,9 @@
   "app": {
     "bundleName": "com.entai23.hmlight",
     "vendor": "example",
-    "versionCode": 1000001,
-    "versionName": "1.0.1",
-    "buildVersion": "1",
+    "versionCode": 1000101,
+    "versionName": "0.1.1",
+    "buildVersion": "0.1.1",
     "icon": "$media:layered_image",
     "alternateIcons": [
       {

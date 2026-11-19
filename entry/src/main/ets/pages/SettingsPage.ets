@@ -1179,9 +1179,16 @@ struct SettingsPage {
           Text(this.bridge.getBuildInfo()).fontSize(11).fontColor($r('app.color.app_text_dim')).width('100%')
           Text('基于 Moonlight 开源项目（GPLv3）修改的 HarmonyOS 串流客户端，非官方版本。')
             .fontSize(11).fontColor($r('app.color.app_text_dim')).width('100%').margin({ top: 4 })
-          Text('源码：https://github.com/Entai23')
+          Text('源码：https://github.com/Entai23/hmlight')
             .fontSize(11).fontColor($r('app.color.app_primary')).width('100%')
             .copyOption(CopyOptions.LocalDevice)
+            .onClick(() => {
+              (getContext(this) as common.UIAbilityContext)
+                .openLink('https://github.com/Entai23/hmlight')
+                .catch(() => {
+                  promptAction.showToast({ message: '无法打开浏览器，可长按复制链接' });
+                });
+            })
           Text('本应用整体按 GNU GPLv3 授权发布，修改部分同样开源。')
             .fontSize(11).fontColor($r('app.color.app_text_dim')).width('100%')
           if (this.devMode) {

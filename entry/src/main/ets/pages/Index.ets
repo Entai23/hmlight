@@ -209,8 +209,15 @@ struct Index {
 
         if (this.hosts.length === 0 || this.browsing) {
           Column({ space: 12 }) {
-            LoadingProgress().width(60).height(60).color($r('app.color.app_text'))
-            Text('正在搜索电脑...').fontSize(20).fontColor($r('app.color.app_text'))
+            // 这里只是刷新"已保存主机"的在线状态，并不扫描局域网。
+            // 空列表时若显示转圈 + "正在搜索"，会被误解为自动发现。
+            if (this.browsing) {
+              LoadingProgress().width(60).height(60).color($r('app.color.app_text'))
+            }
+            Text(this.hosts.length === 0 && !this.browsing
+              ? '还没有添加电脑，点右上角 + 输入 IP'
+              : '正在刷新主机状态...')
+              .fontSize(20).fontColor($r('app.color.app_text'))
           }
           .width('100%')
           .layoutWeight(1)

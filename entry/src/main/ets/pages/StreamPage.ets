@@ -216,8 +216,6 @@ struct StreamPage {
           this.bridge.sendKeyboard(0x1B, 0x04, 0, 0);
         }, 40);
       }
-      this.showControls = true;
-      this.scheduleHideControls();
       return true;
     }
     this.exiting = true;
